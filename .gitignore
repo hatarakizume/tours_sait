@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Виртуальное окружение
+venv/
+env/
+.venv/
+ENV/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Секреты — САМОЕ ВАЖНОЕ
+.env
+.env.*
+!.env.example
+
+# Миграции — НЕ игнорируем (частая ошибка!)
+# apps/*/migrations/  <-- так делать НЕ надо, миграции обязаны быть в git
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Тесты и покрытие
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker
+*.pid
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Собранные файлы фронтенда (если будет Tailwind build)
+node_modules/
