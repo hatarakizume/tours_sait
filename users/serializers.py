@@ -60,22 +60,14 @@ class UserLoginSerializer(serializers.Serializer):
 
     class UserProfileSerializer(serializers.ModelSerializer):
         full_name = serializers.ReadOnlyField()
-        post_count = serializers.SerializerMethodField()
-        comment_count = serializers.SerializerMethodField()
 
         class Meta:
             model = User
             fields = (
                 'id','email','first_name','last_name','full_name','avatar',
-                'created_at','updated_at','post_count'
+                'created_at','updated_at',
             )
         read_only_fields = ('id','created_at','updated_at')
-
-        def get_posts_count(self,obj):
-            return obj.posts.count()
-        
-        def get_comments_count(self,obj):
-            return obj.comments.count()
 
     class UserUpdateSerializer(serializers.ModelSerializer):
 
