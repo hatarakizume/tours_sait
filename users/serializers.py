@@ -57,55 +57,54 @@ class UserLoginSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 'Must include "email" and "password"'
             )
+class UserProfileSerializer(serializers.ModelSerializer):
+    full_name = serializers.ReadOnlyField()
 
-    class UserProfileSerializer(serializers.ModelSerializer):
-        full_name = serializers.ReadOnlyField()
-
-        class Meta:
-            model = User
-            fields = (
-                'id','email','first_name','last_name','full_name','avatar',
-                'created_at','updated_at',
-            )
-        read_only_fields = ('id','created_at','updated_at')
-
-    class UserUpdateSerializer(serializers.ModelSerializer):
-
-        class Meta:
-            model = User
-            fields = (
-                'first_name','last_name','avatar'
-            )
-
-        def update(self, instance, validated_data):
-            for attr, value in validated_data.items():
-                setattr(instance, attr, value)
-            isinstance.save()
-            return isinstance
-
-    class ChengePasswordSerializer(serializers.Serializer):
-        old_password =serializers.CharField(required = True)
-        new_password = serializers.CharField(
-            required = True,
-            validators = [validate_password]
+    class Meta:
+        model = User
+        fields = (
+            'id','email','first_name','last_name','full_name','avatar',
+            'created_at','updated_at',
         )
-        new_password_confirm = serializers.CharField(required = True)
+    read_only_fields = ('id','created_at','updated_at')
 
-        def validate_old_password(self,value):
-            user = self.context['request'].user
-            if not user.check_password(value):
-                raise serializers.ValidationError('Old passsword is incorrect')
-            return value
+class UserUpdateSerializer(serializers.ModelSerializer):
 
-        def validate(self, attrs):
-            if attrs['new_password'] != attrs['new_password_confirm']:
-                raise serializers.ValidationError(
-                    {'new_password': 'Password fields didnt match'}
-                )
-            return attrs
+    class Meta:
+        model = User
+        fields = (
+            'first_name','last_name','avatar'
+        )
 
-        def save(self):
-            user = self.context['request'].user
-            user.set_password(self.validated_data['new_password'])
-            user.save()
-            return user
+    def update(self, instance, validated_data):
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        isinstance.save()
+        return isinstance
+
+class ChengePasswordSerializer(serializers.Serializer):
+    old_password =serializers.CharField(required = True)
+    new_password = serializers.CharField(
+        required = True,
+        validators = [validate_password]
+    )
+    new_password_confirm = serializers.CharField(required = True)
+
+    def validate_old_password(self,value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError('Old passsword is incorrect')
+        return value
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError(
+                {'new_password': 'Password fields didnt match'}
+            )
+        return attrs
+
+    def save(self):
+        user = self.context['request'].user
+        user.set_password(self.validated_data['new_password'])
+        user.save()
+        return user
