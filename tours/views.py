@@ -1,106 +1,104 @@
+from rest_framework import generics,permissions,status,filters
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
+
 from django.shortcuts import get_object_or_404
-from django.views.generic import TemplateView, DetailView
-from django.http import HttpResponse
-from django.template.response import TemplateResponse
 from .models import Category, Product
+
+from .permissions import IsAuthorOrReadOnly
+from .serializers import (
+    CategorySerializer,
+    ProductCreateUpdateSerializer,
+    ProductListSerializer,
+    ProductDatailSerializer
+)
 from django.db.models import Q
 # Create your views here.
 
-class IndexView(TemplateView):
-    template_name = 'main/base.html'
+class CategoryListCreatedView(generics.ListCreateAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'description']
+    ordering_fields = ['name', 'created_at']
+    ordering = ['name']
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['categories'] = Category.objects.all()
-        context['current_category'] = None
-        return context
+class CategoryDatailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Category.odjects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    lookup_field = 'slug'
 
-    def get(self, request, *args, **kwargs):
-        context = self.get_context_data(**kwargs)
-        if request.headers.get('HX-Request'):
-            return TemplateResponse(request, 'tours/home_content.html', context)
-        return TemplateResponse(request, self.template_name, context)
+class ProductListCreateView(generics.ListCreateAPIView):
+    serializer_class = ProductListSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['category', 'author', 'status']
+    search_fields = ['title', 'content']
+    ordering_fields = ['created_at', 'updated_at']
+    ordering = ['-created_at']
 
-class CatalogView(TemplateView):
-    template = 'tours/base.html'
+    def get_queryset(self):
+        queryset = Product.objects.select_related('author','category')
 
-    FILTER_MAPPING = {
-        'min_price': lambda queryset, value: queryset.filter(price_gte=value),
-        'max_price': lambda queryset, value: queryset.filter(price_lte=value)
-    }
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        category_slug = kwargs.get('category_slug')
-        categories = Category.objects.all()
-        products = Product.objects.all().order_by('-created_at')
-        current_category = None
-        if category_slug:
-            current_category = get_object_or_404(Category, slug = category_slug)
-            products = products.filter(category=current_category)
-
-        query = self.request.GET.get('q')
-        if query:
-            products = products.filter(
-                Q(name__icontains=query) | Q(description_icnotains=query)
+        if not self.request.user.is_authenticated:
+            queryset = Product.object.filter(status='punlished')    
+        else:
+            queryset = queryset.filter(
+                Q(status='published') | Q(author=self.request.user)
             )
+        return queryset
 
-        filter_params = {}
-        for param, filter_func in self.FILTER_MAPPING.items():
-            value = self.request.GET.get(param)
-            if value:
-                products = filter_func(products, value)
-                filter_params[param] = value
-            else:
-                filter_params[param] = ''
+    def get_serializer_class(self):
+        if self.request.method == 'Post':
+            return ProductCreateUpdateSerializer
+        return ProductListSerializer
 
-        filter_params['q'] = query or ''
+class ProductDatailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Product.objects.select_related('author','category')
+    serializer_class = ProductDatailSerializer
+    permission_classes = IsAuthorOrReadOnly
+    lookup_field = 'slug'
 
-        context.update({
-            'categories': categories,
-            'products': products,
-            'current_category': category_slug,
-            'filter_params': filter_params,
-            'search_query': query or ''
-            }
-        )
-        if self.request.GET.get('show_search') == 'true':
-            context['show_search'] = True
-        elif self.request.GET.get('reset_search') == 'true':
-            context['reset_search'] = True
+    def get_serializer_class(self):
+            if self.request.method in ['PUT','PUTCH']:
+                return ProductCreateUpdateSerializer
+            return ProductDatailSerializer
 
-        return context
+class MyProductView(generics.ListAPIView):
+    serializer_class = ProductListSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = ['category','status']
+    search_fields = ['title','content']
+    ordering_foelds = ['created_at','updated_at']
+    ordering = ['-creaetd_at']
 
-    def get(self, request, *args, **kwargs):
-        context = super().get_context_data(**kwargs)
-        if request.headers.get('HX-Request'):
-            if context.get('show_search'):
-                return TemplateResponse(request, 'tours/search_input.html', context)
-            elif context.get('reset_search'):
-                return TemplateResponse(request, 'tours/search_button.html', {})
-            template = 'tours/filter_modal.html' if request.GET.get('show_filter') == 'true' else 'tours/catalog.html'
-            return TemplateResponse(request, template, context)
-        return TemplateResponse(request, self.template_name, context)
+    def get_queryset(self):
+        return Product.objects.filter(
+            author = self.request.user
+        ).select_related('author', 'category')
 
-class ProductDatailView(DetailView):
-    model = Product
-    template_name = 'tours/base.html'
-    slug_field = 'slug'
-    slug_url_kwarg = 'slug'
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def product_by_category(request,category_slug):
+    category = get_object_or_404(Category, slug=category_slug)
+    product = Product.objects.filter(
+        category=category,
+        status='published',
+    ).select_related('author', 'category').order_by('-created_at')
+    serializer = ProductListSerializer(product,many=True,context={'request': request})
+    return Response({
+        'category': CategorySerializer(category).data,
+        'product': serializer.data
+    })
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        product = self.get_object()
-        context['categories'] = Category.objects.all()
-        context['related_products'] = Product.objects.filter(
-            category = product.category
-        ).exclude(id=product.id)[:4]
-        context['current_category'] = product.category.slug
-        return context
-
-    def get(self, request, *args, **kwargs):
-        self.object = self.get_object()
-        context = self.get_context_data(**kwargs)
-        if request.headers.get('HX-Request'):
-            return TemplateResponse(request,'tours/product_datail.html',context)
-        raise TemplateResponse(request, self.template_name, context)
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def recent_product(request):
+    product = Product.objects.filter(
+        status='published',
+    ).select_related('author', 'category').order_by('-created_at')[:10]
+    serializer = ProductListSerializer(product,many=True,context={'request': request})
+    return Response(serializer.data)
